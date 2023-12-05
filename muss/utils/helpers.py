@@ -31,7 +31,8 @@ import numpy as np
 def run_command(cmd, mute=False):
     def readline_with_timeout(input_stream, timeout=0.1):
         """Avoids handing indefinitely when calling readline()
-        https://stackoverflow.com/questions/10756383/timeout-on-subprocess-readline-in-python"""
+        https://stackoverflow.com/questions/10756383/timeout-on-subprocess-readline-in-python
+        """
         poll_obj = select.poll()
         poll_obj.register(input_stream, select.POLLIN)
         start = time.time()
@@ -39,13 +40,13 @@ def run_command(cmd, mute=False):
             poll_result = poll_obj.poll(0)
             if poll_result:
                 return input_stream.readline()
-        return ''
+        return ""
 
     def get_available_output(input_stream):
-        output = ''
+        output = ""
         while True:
             line = readline_with_timeout(input_stream, timeout=0.1)
-            if line == '':
+            if line == "":
                 break
             output += line
         return output
@@ -53,15 +54,15 @@ def run_command(cmd, mute=False):
     def read_and_print(input_stream, output_stream):
         output = get_available_output(input_stream)
         if not mute:
-            print(output, file=output_stream, end='', flush=True)
+            print(output, file=output_stream, end="", flush=True)
         return output
 
     # Inspired from subprocess.run() source
     # HACK: shell=True is not secure
-    with Popen(cmd, stdout=PIPE, stderr=PIPE, shell=True, encoding='utf-8') as process:
+    with Popen(cmd, stdout=PIPE, stderr=PIPE, shell=True, encoding="utf-8") as process:
         try:
-            stdout = ''
-            stderr = ''
+            stdout = ""
+            stderr = ""
             while True:
                 stdout += read_and_print(process.stdout, sys.stdout)
                 stderr += read_and_print(process.stderr, sys.stderr)
@@ -80,35 +81,41 @@ def run_command(cmd, mute=False):
         retcode = process.poll()
         if retcode:
             print(stderr, file=sys.stderr)
-            raise CalledProcessError(retcode, process.args, output=stdout, stderr=stderr)
+            raise CalledProcessError(
+                retcode, process.args, output=stdout, stderr=stderr
+            )
     return stdout.strip()
 
 
 @contextmanager
-def open_files(filepaths, mode='r'):
+def open_files(filepaths, mode="r"):
     files = []
     try:
-        files = [Path(filepath).open(mode, encoding='utf-8') for filepath in filepaths]
+        files = [Path(filepath).open(mode, encoding="utf-8") for filepath in filepaths]
         yield files
     finally:
         [f.close() for f in files]
 
 
-def yield_lines_in_parallel(filepaths, strip=True, strict=True, n_lines=float('inf')):
+def yield_lines_in_parallel(filepaths, strip=True, strict=True, n_lines=float("inf")):
     assert type(filepaths) == list
     with open_files(filepaths) as files:
         for i, parallel_lines in enumerate(zip_longest(*files)):
             if i >= n_lines:
                 break
             if None in parallel_lines:
-                assert not strict, f'Files don\'t have the same number of lines: {filepaths}, use strict=False'
+                assert (
+                    not strict
+                ), f"Files don't have the same number of lines: {filepaths}, use strict=False"
             if strip:
-                parallel_lines = [l.rstrip('\n') if l is not None else None for l in parallel_lines]
+                parallel_lines = [
+                    l.rstrip("\n") if l is not None else None for l in parallel_lines
+                ]
             yield parallel_lines
 
 
 class FilesWrapper:
-    '''Write to multiple open files at the same time'''
+    """Write to multiple open files at the same time"""
 
     def __init__(self, files, strict=True):
         self.files = files
@@ -120,12 +127,12 @@ class FilesWrapper:
             if line is None:
                 assert not self.strict
                 continue
-            f.write(line.rstrip('\n') + '\n')
+            f.write(line.rstrip("\n") + "\n")
 
 
 @contextmanager
 def write_lines_in_parallel(filepaths, strict=True):
-    with open_files(filepaths, 'w') as files:
+    with open_files(filepaths, "w") as files:
         yield FilesWrapper(files, strict=strict)
 
 
@@ -134,22 +141,22 @@ def write_lines(lines, filepath=None):
         filepath = get_temp_filepath()
     filepath = Path(filepath)
     filepath.parent.mkdir(parents=True, exist_ok=True)
-    with filepath.open('w', encoding='utf-8') as f:
+    with filepath.open("w", encoding="utf-8") as f:
         for line in lines:
-            f.write(line + '\n')
+            f.write(line + "\n")
     return filepath
 
 
 def yield_lines(filepath, gzipped=False, n_lines=None):
     filepath = Path(filepath)
     open_function = open
-    if gzipped or filepath.name.endswith('.gz'):
+    if gzipped or filepath.name.endswith(".gz"):
         open_function = gzip.open
-    with open_function(filepath, 'rt', encoding='utf-8') as f:
+    with open_function(filepath, "rt", encoding="utf-8") as f:
         for i, l in enumerate(f):
             if n_lines is not None and i >= n_lines:
                 break
-            yield l.rstrip('\n')
+            yield l.rstrip("\n")
 
 
 def read_lines(filepath, gzipped=False):
@@ -175,19 +182,19 @@ def open_with_lock(filepath, mode):
 def get_lockfile_path(path):
     path = Path(path)
     if path.is_dir():
-        return path / '.lockfile'
+        return path / ".lockfile"
     if path.is_file():
-        return path.parent / f'.{path.name}.lockfile'
+        return path.parent / f".{path.name}.lockfile"
 
 
 @contextmanager
 def lock_file(filepath):
-    '''Lock file foo.txt by creating a lock on .foo.txt.lock'''
+    """Lock file foo.txt by creating a lock on .foo.txt.lock"""
     # TODO: do we really need to create an additional file for locking ?
     filepath = Path(filepath)
-    assert filepath.exists(), f'File does not exists: {filepath}'
+    assert filepath.exists(), f"File does not exists: {filepath}"
     lockfile_path = get_lockfile_path(filepath)
-    with open_with_lock(lockfile_path, 'w'):
+    with open_with_lock(lockfile_path, "w"):
         yield
 
 
@@ -196,9 +203,9 @@ def lock_directory(dir_path):
     # TODO: Locking a directory should lock all files in that directory
     # Right now if we lock foo/, someone else can lock foo/bar.txt
     # TODO: Nested with lock_directory() should not be blocking
-    assert Path(dir_path).exists(), f'Directory does not exists: {dir_path}'
+    assert Path(dir_path).exists(), f"Directory does not exists: {dir_path}"
     lockfile_path = get_lockfile_path(dir_path)
-    with open_with_lock(lockfile_path, 'w'):
+    with open_with_lock(lockfile_path, "w"):
         yield
 
 
@@ -219,20 +226,20 @@ def harmonic_mean(values, coefs=None):
     return np.sum(coefs) / np.dot(coefs, 1 / values)
 
 
-def arg_name_python_to_cli(arg_name, cli_sep='-'):
-    arg_name = arg_name.replace('_', cli_sep)
-    return f'--{arg_name}'
+def arg_name_python_to_cli(arg_name, cli_sep="-"):
+    arg_name = arg_name.replace("_", cli_sep)
+    return f"--{arg_name}"
 
 
-def arg_name_cli_to_python(arg_name, cli_sep='-'):
-    assert arg_name.startswith('--')
-    arg_name = arg_name.strip('-').replace(cli_sep, '_')
+def arg_name_cli_to_python(arg_name, cli_sep="-"):
+    assert arg_name.startswith("--")
+    arg_name = arg_name.strip("-").replace(cli_sep, "_")
     return arg_name
 
 
 def failsafe_ast_literal_eval(expression):
     try:
-        return ast.literal_eval(expression.replace('PosixPath', ''))
+        return ast.literal_eval(expression.replace("PosixPath", ""))
     except (SyntaxError, ValueError):
         return expression
 
@@ -241,10 +248,10 @@ def cli_args_list_to_kwargs(cli_args_list):
     kwargs = {}
     i = 0
     while i < len(cli_args_list) - 1:
-        assert cli_args_list[i].startswith('--'), cli_args_list[i]
+        assert cli_args_list[i].startswith("--"), cli_args_list[i]
         key = arg_name_cli_to_python(cli_args_list[i])
         next_element = cli_args_list[i + 1]
-        if next_element.startswith('--'):
+        if next_element.startswith("--"):
             kwargs[key] = True
             i += 1
         else:
@@ -256,7 +263,7 @@ def cli_args_list_to_kwargs(cli_args_list):
     return kwargs
 
 
-def kwargs_to_cli_args_list(kwargs, cli_sep='-'):
+def kwargs_to_cli_args_list(kwargs, cli_sep="-"):
     cli_args_list = []
     for key, val in kwargs.items():
         key = arg_name_python_to_cli(key, cli_sep)
@@ -275,8 +282,8 @@ def args_str_to_dict(args_str):
     return cli_args_list_to_kwargs(shlex.split(args_str))
 
 
-def args_dict_to_str(args_dict, cli_sep='-'):
-    return ' '.join(kwargs_to_cli_args_list(args_dict, cli_sep=cli_sep))
+def args_dict_to_str(args_dict, cli_sep="-"):
+    return " ".join(kwargs_to_cli_args_list(args_dict, cli_sep=cli_sep))
 
 
 @contextmanager
@@ -294,16 +301,26 @@ def redirect_streams(source_streams, target_streams):
         for target_flush in target_flushes:
             target_flush()
 
-    original_source_stream_writes = [source_stream.write for source_stream in source_streams]
-    original_source_stream_flushes = [source_stream.flush for source_stream in source_streams]
+    original_source_stream_writes = [
+        source_stream.write for source_stream in source_streams
+    ]
+    original_source_stream_flushes = [
+        source_stream.flush for source_stream in source_streams
+    ]
     try:
         for source_stream in source_streams:
             source_stream.write = MethodType(patched_write, source_stream)
             source_stream.flush = MethodType(patched_flush, source_stream)
         yield
     finally:
-        for source_stream, original_source_stream_write, original_source_stream_flush in zip(
-            source_streams, original_source_stream_writes, original_source_stream_flushes
+        for (
+            source_stream,
+            original_source_stream_write,
+            original_source_stream_flush,
+        ) in zip(
+            source_streams,
+            original_source_stream_writes,
+            original_source_stream_flushes,
         ):
             source_stream.write = original_source_stream_write
             source_stream.flush = original_source_stream_flush
@@ -322,10 +339,14 @@ def mute(mute_stdout=True, mute_stderr=True):
 
 @contextmanager
 def log_std_streams(filepath):
-    log_file = open(filepath, 'w', encoding='utf-8')
+    log_file = open(filepath, "w", encoding="utf-8")
     try:
-        with redirect_streams(source_streams=[sys.stdout], target_streams=[log_file, sys.stdout]):
-            with redirect_streams(source_streams=[sys.stderr], target_streams=[log_file, sys.stderr]):
+        with redirect_streams(
+            source_streams=[sys.stdout], target_streams=[log_file, sys.stdout]
+        ):
+            with redirect_streams(
+                source_streams=[sys.stderr], target_streams=[log_file, sys.stderr]
+            ):
                 yield
     finally:
         log_file.close()
@@ -337,7 +358,11 @@ def add_dicts(*dicts):
 
 def get_default_args(func):
     signature = inspect.signature(func)
-    return {k: v.default for k, v in signature.parameters.items() if v.default is not inspect.Parameter.empty}
+    return {
+        k: v.default
+        for k, v in signature.parameters.items()
+        if v.default is not inspect.Parameter.empty
+    }
 
 
 @lru_cache(maxsize=10000)
@@ -350,7 +375,7 @@ def get_string_hash(string):
 
 
 def get_files_hash(filepaths):
-    return get_string_hash(''.join([get_file_hash(path) for path in sorted(filepaths)]))
+    return get_string_hash("".join([get_file_hash(path) for path in sorted(filepaths)]))
 
 
 class SkipWithBlock(Exception):
@@ -373,10 +398,10 @@ class create_directory_or_skip(AbstractContextManager):
             self.directory_lock = lock_directory(self.dir_path)
             self.directory_lock.__enter__()
             files_in_directory = list(self.dir_path.iterdir())
-            if set(files_in_directory) in [set([]), set([self.dir_path / '.lockfile'])]:
+            if set(files_in_directory) in [set([]), set([self.dir_path / ".lockfile"])]:
                 # TODO: Quick hack to remove empty directories
                 self.directory_lock.__exit__(None, None, None)
-                print(f'Removing empty directory {self.dir_path}')
+                print(f"Removing empty directory {self.dir_path}")
                 shutil.rmtree(self.dir_path)
             else:
                 # Deep magic hack to skip the execution of the code inside the with block
@@ -404,7 +429,7 @@ class create_directory_or_skip(AbstractContextManager):
                 return True  # Suppress special SkipWithBlock exception
             if issubclass(type, BaseException):
                 # Rollback
-                print(f'Error: Rolling back creation of directory {self.dir_path}')
+                print(f"Error: Rolling back creation of directory {self.dir_path}")
                 shutil.rmtree(self.dir_path)
                 return False  # Reraise the exception
 
@@ -438,7 +463,7 @@ def create_temp_dir():
     try:
         yield temp_dir
     finally:
-        shutil.rmtree(temp_dir)
+        shutil.rmtree(temp_dir, ignore_errors=True)
 
 
 def delete_files(filepaths):
@@ -451,21 +476,21 @@ def delete_files(filepaths):
 @contextmanager
 def log_action(action_description):
     start_time = time.time()
-    print(f'{action_description}...')
+    print(f"{action_description}...")
     try:
         yield
     except BaseException as e:
-        print(f'{action_description} failed after {time.time() - start_time:.2f}s.')
+        print(f"{action_description} failed after {time.time() - start_time:.2f}s.")
         raise e
-    print(f'{action_description} completed after {time.time() - start_time:.2f}s.')
+    print(f"{action_description} completed after {time.time() - start_time:.2f}s.")
 
 
 def print_running_time(func):
-    '''Decorator to print running time of function for logging purposes'''
+    """Decorator to print running time of function for logging purposes"""
 
     @wraps(func)  # To preserve the name and path for pickling purposes
     def wrapped_func(*args, **kwargs):
-        function_name = getattr(func, '__name__', repr(func))
+        function_name = getattr(func, "__name__", repr(func))
         with log_action(function_name):
             return func(*args, **kwargs)
 
@@ -474,7 +499,9 @@ def print_running_time(func):
 
 def get_hashable_object(obj):
     def get_hashable_dict(d):
-        return tuple(sorted([(key, get_hashable_object(value)) for key, value in d.items()]))
+        return tuple(
+            sorted([(key, get_hashable_object(value)) for key, value in d.items()])
+        )
 
     def get_hashable_list(l):
         return tuple(l)
@@ -493,14 +520,14 @@ def get_hashable_object(obj):
 
 
 def generalized_lru_cache(maxsize=128):
-    '''Decorator factory'''
+    """Decorator factory"""
 
     def _generalized_lru_cache(function):
-        '''Actual decorator'''
+        """Actual decorator"""
 
         def hash_keys(*args, **kwargs):
             def generalized_hash(arg):
-                '''Hashes objects that are not hashable by default'''
+                """Hashes objects that are not hashable by default"""
                 return hash(get_hashable_object(arg))
 
             args = tuple(generalized_hash(arg) for arg in args)
