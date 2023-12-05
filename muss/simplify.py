@@ -23,6 +23,13 @@ ALLOWED_MODEL_NAMES = [
     "muss_pt_mined",
 ]
 
+TOKENS_RATIO_PARAMETERS = {
+    "length_ratio": "LengthRatioPreprocessor",
+    "replace_ratio": "ReplaceOnlyLevenshteinPreprocessor",
+    "word_rank_ratio": "WordRankRatioPreprocessor",
+    "dependency_ratio": "DependencyTreeDepthRatioPreprocessor",
+}
+
 TOKENS_RATIO_DEFAULT = {
     "LengthRatioPreprocessor": 0.9,
     "ReplaceOnlyLevenshteinPreprocessor": 0.8,
@@ -65,7 +72,7 @@ def get_language_from_model_name(model_name):
     return re.match("(..)_*", model_name).groups()[0]
 
 
-def get_muss_preprocessors(model_name):
+def get_muss_preprocessors(model_name, ratios):
     language = get_language_from_model_name(model_name)
     preprocessors_kwargs = {
         "LengthRatioPreprocessor": {
@@ -87,6 +94,11 @@ def get_muss_preprocessors(model_name):
             "use_short_name": False,
         },
     }
+
+    for k, v in ratios.items():
+        proc_k = TOKENS_RATIO_PARAMETERS[k]
+        preprocessors_kwargs[proc_k]["target_ratio"] = v
+
     if is_model_using_mbart(model_name):
         preprocessors_kwargs["SentencePiecePreprocessor"] = {
             "sentencepiece_model_path": get_model_path(model_name)
@@ -98,10 +110,16 @@ def get_muss_preprocessors(model_name):
     return get_preprocessors(preprocessors_kwargs)
 
 
-def simplify_sentences(source_sentences, model_name="muss_en_wikilarge_mined"):
+def simplify_sentences(
+    source_sentences, model_name="muss_en_wikilarge_mined", **ratios
+):
+    for k, v in ratios.items():
+        assert k in TOKENS_RATIO_PARAMETERS
+        assert v >= 0 and v <= 1
+
     # Best ACCESS parameter values for the en_bart_access_wikilarge_mined model, ideally we would need to use another set of parameters for other models.
     exp_dir = get_model_path(model_name)
-    preprocessors = get_muss_preprocessors(model_name)
+    preprocessors = get_muss_preprocessors(model_name, ratios)
     generate_kwargs = {}
     if is_model_using_mbart(model_name):
         generate_kwargs["task"] = "translation_from_pretrained_bart"
