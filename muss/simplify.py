@@ -110,21 +110,27 @@ def get_muss_preprocessors(model_name, ratios):
     return get_preprocessors(preprocessors_kwargs)
 
 
-def simplify_sentences(
-    source_sentences, model_name="muss_en_wikilarge_mined", **ratios
-):
-    for k, v in ratios.items():
-        assert k in TOKENS_RATIO_PARAMETERS
-        assert v >= 0 and v <= 1
-
-    # Best ACCESS parameter values for the en_bart_access_wikilarge_mined model, ideally we would need to use another set of parameters for other models.
+def load_simplifier(model_name):
     exp_dir = get_model_path(model_name)
-    preprocessors = get_muss_preprocessors(model_name, ratios)
     generate_kwargs = {}
     if is_model_using_mbart(model_name):
         generate_kwargs["task"] = "translation_from_pretrained_bart"
         generate_kwargs["langs"] = get_mbart_languages_from_model(model_name)
     simplifier = get_fairseq_simplifier(exp_dir, **generate_kwargs)
+    return simplifier
+
+
+def simplify_sentences(
+    source_sentences, simplifier=None, model_name="muss_en_wikilarge_mined", **ratios
+):
+    for k, v in ratios.items():
+        assert k in TOKENS_RATIO_PARAMETERS
+        assert v >= 0 and v <= 1
+
+    if simplifier is None:
+        simplifier = load_simplifier(model_name)
+
+    preprocessors = get_muss_preprocessors(model_name, ratios)
     simplifier = get_preprocessed_simplifier(simplifier, preprocessors=preprocessors)
     source_path = get_temp_filepath()
     write_lines(source_sentences, source_path)
